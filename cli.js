@@ -10,6 +10,7 @@ var s3 = require('s3');
 var url = require('url');
 var http = require('http');
 var https = require('https');
+var ProxyAgent = require('https-proxy-agent');
 var argOptions = {
   'default': {
     'config': path.join(osenv.home(), '.s3cfg'),
@@ -69,25 +70,36 @@ fs.readFile(args.config, {encoding: 'utf8'}, function(err, contents) {
   if (config && config.default) {
     accessKeyId = config.default.access_key;
     secretAccessKey = config.default.secret_key;
+    proxyHost = config.default.proxy_host;
+    proxyPort = config.default.proxy_port;
   }
   if (!secretAccessKey || !accessKeyId) {
     console.error("Config file missing access_key or secret_key");
     process.exit(1);
     return;
   }
-  setup(secretAccessKey, accessKeyId);
+  setup(secretAccessKey, accessKeyId, proxyHost, proxyPort);
 });
 
-function setup(secretAccessKey, accessKeyId) {
+function setup(secretAccessKey, accessKeyId, proxyHost, proxyPort) {
   var maxSockets = parseInt(args['max-sockets'], 10);
   http.globalAgent.maxSockets = maxSockets;
   https.globalAgent.maxSockets = maxSockets;
+  var agent;
+
+  if (proxyHost && proxyPort) {
+    agent = new ProxyAgent({ host: proxyHost, port: proxyPort });
+    agent.maxSockets = maxSockets;
+  }
   client = s3.createClient({
     s3Options: {
       accessKeyId: accessKeyId,
       secretAccessKey: secretAccessKey,
       sslEnabled: !args.insecure,
       region: args.region,
+      httpOptions: {
+        agent: agent
+      },
     },
   });
   var cmd = args._.shift();
